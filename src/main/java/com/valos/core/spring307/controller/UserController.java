@@ -2,15 +2,17 @@ package com.valos.core.spring307.controller;
 
 import com.valos.core.spring307.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/api/v1/user")
 public class UserController {
     @Autowired
     UserService service;
 
     @GetMapping("/list")
+    @PreAuthorize("hasAuthority('DEFAULT_AUTH')")
     public Object getUser (){
         return service.getList("");
     }

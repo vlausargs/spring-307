@@ -1,5 +1,6 @@
 package com.valos.core.spring307.controller;
 
+import com.valos.core.spring307.component.ResponseWrapper;
 import com.valos.core.spring307.model.dto.AuthenticationRequest;
 import com.valos.core.spring307.model.dto.AuthenticationResponse;
 import com.valos.core.spring307.model.dto.RegisterRequest;
@@ -23,10 +24,12 @@ public class AuthenticationController {
     private final AuthenticationService service;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(
+    public ResponseEntity<Object> register(
             @RequestBody RegisterRequest request
     ) {
-        return ResponseEntity.ok(service.register(request));
+        ResponseWrapper res = service.register(request);
+        return res.getCode() == 0?ResponseEntity.badRequest().body(res):ResponseEntity.ok(res.getResult());
+
     }
     @PostMapping("/authenticate")
     public ResponseEntity<AuthenticationResponse> authenticate(

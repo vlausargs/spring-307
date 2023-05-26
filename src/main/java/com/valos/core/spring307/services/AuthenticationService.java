@@ -1,6 +1,9 @@
 package com.valos.core.spring307.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.valos.core.spring307.component.ConsMessage;
+import com.valos.core.spring307.component.ResponseWrapper;
+import com.valos.core.spring307.dao.AuthorityDao;
 import com.valos.core.spring307.dao.TokenRepository;
 import com.valos.core.spring307.dao.UserRepository;
 import com.valos.core.spring307.model.Token;
@@ -30,6 +33,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthenticationService {
     private final UserRepository repository;
+    private final AuthorityDao authDao;
     private final TokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -37,38 +41,57 @@ public class AuthenticationService {
 
     private final UserDetailsManager userDetailsManager;
 
-    public AuthenticationResponse register(RegisterRequest request) {
+    public ResponseWrapper register(RegisterRequest request) {
+        ResponseWrapper result = new ResponseWrapper();
+
         //create user
         User user = new User();
-        user.setId(request.getEmail());
+        user.setEmail(request.getEmail());
         user.setName(request.getFirstname().concat(" ").concat(request.getLastname()));
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        var savedUser = repository.save(user);
 
-       //generate token from UserDetailManager
-        UserDetails userDetails = userDetailsManager.loadUserByUsername(request.getEmail());
-        var jwtToken = jwtService.generateToken(userDetails);
-        var refreshToken = jwtService.generateRefreshToken(userDetails);
+        try{
+            var savedUser = repository.save(user);
 
-        //save token to db
-        saveUserToken(savedUser, jwtToken);
+            //add default authority
+            Map<String, Object> requestMap = new HashMap<>();
+            requestMap.put("user_id",savedUser.getId());
+            authDao.assignAuthorityToUser(requestMap);
 
-        return AuthenticationResponse.builder()
-                .accessToken(jwtToken)
-                .refreshToken(refreshToken)
-                .build();
+           //generate token from UserDetailManager
+            UserDetails userDetails = userDetailsManager.loadUserByUsername(savedUser.getId());
+            var jwtToken = jwtService.generateToken(userDetails);
+            var refreshToken = jwtService.generateRefreshToken(userDetails);
+
+            //save token to db
+            saveUserToken(savedUser, jwtToken);
+            result.setResult(AuthenticationResponse.builder()
+                    .accessToken(jwtToken)
+                    .refreshToken(refreshToken)
+                    .build());
+            result.setCode(1);
+            result.setMessage(ConsMessage.MESSAGE_SUCCESS);
+        }catch (Exception e){
+            result.setCode(0);
+            System.err.println("Error AUTH");
+            System.err.println(e.getMessage());
+            result.setMessage(ConsMessage.MESSAGE_FAILED);
+        }
+        return result;
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
+        User user = repository.findByEmail(request.getEmail()).orElseThrow();
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
+                        user.getId(),
                         request.getPassword()
                 )
         );
 
         //generate token from authenticated UserDetailManager
-        UserDetails userDetails = userDetailsManager.loadUserByUsername(request.getEmail());
+        UserDetails userDetails = userDetailsManager.loadUserByUsername(user.getId());
 
         //generate authority to List<String>
         Map<String,Object> extra = new HashMap<>();
@@ -78,7 +101,7 @@ public class AuthenticationService {
         var refreshToken = jwtService.generateRefreshToken(userDetails);
 
         //save new token to db & revoke previous token
-        User user = repository.findById(request.getEmail()).orElseThrow();
+
         revokeAllUserTokens(user);
         saveUserToken(user, jwtToken);
 
@@ -116,17 +139,17 @@ public class AuthenticationService {
     ) throws IOException {
         final String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         final String refreshToken;
-        final String userEmail;
+        final String userId;
         if (authHeader == null ||!authHeader.startsWith("Bearer ")) {
             return;
         }
         refreshToken = authHeader.substring(7);
-        userEmail = jwtService.extractUsername(refreshToken);
-        if (userEmail != null) {
+        userId = jwtService.extractUsername(refreshToken);
+        if (userId != null) {
 
-            User user = this.repository.findById(userEmail)
+            User user = this.repository.findById(userId)
                     .orElseThrow();
-            UserDetails userDetails = userDetailsManager.loadUserByUsername(userEmail);
+            UserDetails userDetails = userDetailsManager.loadUserByUsername(userId);
             if (jwtService.isTokenValid(refreshToken, userDetails)) {
                 Map<String,Object> extra = new HashMap<>();
                 extra.put("authority",userDetails.getAuthorities());

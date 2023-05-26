@@ -21,7 +21,7 @@ public class UserServiceImpl implements UserService {
             result.setCode(1);
             result.setMessage(ConsMessage.MESSAGE_SUCCESS);
         } catch (Exception e) {
-            result.setCode(1);
+            result.setCode(0);
             System.err.println("testerr");
             System.err.println(e.getMessage());
             result.setMessage(ConsMessage.MESSAGE_FAILED);
@@ -35,7 +35,7 @@ public class UserServiceImpl implements UserService {
 
         try {
             result.setResult(repo.save(request));
-            result.setCode(1);
+            result.setCode(0);
             result.setMessage(ConsMessage.MESSAGE_SUCCESS);
         } catch (Exception e) {
             result.setCode(1);
